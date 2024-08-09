@@ -30,7 +30,7 @@ func (dao *TempLogDAO) Select(limit int) ([]*TempLog, error) {
 }
 
 func (dao *TempLogDAO) Get(pk int) (*TempLog, error) {
-	sqlStatement := "SELECT temp_log_id, ferment_run_id, temp FROM temp_log WHERE id=$1;"
+	sqlStatement := "SELECT temp_log_id, ferment_run_id, temp FROM temp_log WHERE temp_log_id=$1;"
 
 	var tempLogId int
 	var fermentRunId int

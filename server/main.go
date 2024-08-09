@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strconv"
 
 	_ "github.com/lib/pq"
 )
@@ -55,10 +56,36 @@ type RequestEnvironment struct {
 	db *sql.DB
 }
 
-func (env *RequestEnvironment) handleTempLog(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case "POST":
-		resp, err := postTempLog(r, env.db)
+// func (env *RequestEnvironment) handleTempLog(w http.ResponseWriter, r *http.Request) {
+// 	switch r.Method {
+// 	case "POST":
+// 		resp, err := postTempLog(r, env.db)
+// 		if err != nil {
+// 			w.WriteHeader(http.StatusBadRequest)
+// 			io.WriteString(w, generateError(err.Error()))
+// 		} else {
+// 			w.WriteHeader(http.StatusOK)
+// 			io.WriteString(w, resp)
+// 		}
+// 	case "GET":
+// 		resp, err := getTempLog(r, env.db)
+// 		if err != nil {
+// 			w.WriteHeader(http.StatusBadRequest)
+// 			io.WriteString(w, generateError(err.Error()))
+// 		} else {
+// 			w.WriteHeader(http.StatusOK)
+// 			io.WriteString(w, resp)
+// 		}
+// 	default:
+// 		w.WriteHeader(http.StatusMethodNotAllowed)
+// 		io.WriteString(w, "Invalid method")
+// 	}
+// }
+
+func (env *RequestEnvironment) handle(f func(w http.ResponseWriter, r *http.Request) (string, error)) func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		resp, err := f(w, r)
+		fmt.Printf("%s", err)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			io.WriteString(w, generateError(err.Error()))
@@ -66,9 +93,6 @@ func (env *RequestEnvironment) handleTempLog(w http.ResponseWriter, r *http.Requ
 			w.WriteHeader(http.StatusOK)
 			io.WriteString(w, resp)
 		}
-	default:
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		io.WriteString(w, "Invalid method")
 	}
 }
 
@@ -95,8 +119,28 @@ func generateError(error string) string {
 	return string(val)
 }
 
-func postTempLog(r *http.Request, dbconn *sql.DB) (string, error) {
-	tempLogDAO := TempLogDAO{db: dbconn}
+func (env *RequestEnvironment) getTempLog(_ http.ResponseWriter, r *http.Request) (string, error) {
+	tempLogDAO := TempLogDAO{db: env.db}
+	pk, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		return "", BadRequestError(err)
+	}
+
+	tempLog, err := tempLogDAO.Get(pk)
+	if err != nil {
+		return "", InternalServerError(err)
+	}
+
+	resp, err := json.Marshal(tempLog)
+	if err != nil {
+		return "", InternalServerError(err)
+	}
+
+	return string(resp), nil
+}
+
+func (env *RequestEnvironment) postTempLog(_ http.ResponseWriter, r *http.Request) (string, error) {
+	tempLogDAO := TempLogDAO{db: env.db}
 
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
@@ -145,7 +189,8 @@ func main() {
 	env := RequestEnvironment{db: db}
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/temp-log", env.handleTempLog)
+	mux.HandleFunc("POST /temp-log", env.handle(env.postTempLog))
+	mux.HandleFunc("GET /temp-log/{id}", env.handle(env.getTempLog))
 
 	ctx, cancelCtx := context.WithCancel(context.Background())
 	server := &http.Server{
