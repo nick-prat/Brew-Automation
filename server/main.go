@@ -26,11 +26,6 @@ type MessageBody struct {
 	Field string `json:"message"`
 }
 
-type TempLog struct {
-	Temp       float32 `json:"temp"`
-	FermentRun int     `json:"ferment_run_id"`
-}
-
 type ErrorBody struct {
 	Error string `json:"error"`
 }
@@ -100,14 +95,9 @@ func generateError(error string) string {
 	return string(val)
 }
 
-func createTempLog(db *sql.DB, tempLog *TempLog) (int, error) {
-	sqlStatement := "INSERT INTO temp_log (temp, ferment_run_id) VALUES ($1, $2) RETURNING temp_log_id"
-	id := 0
-	err := db.QueryRow(sqlStatement, tempLog.Temp, tempLog.FermentRun).Scan(&id)
-	return id, err
-}
-
 func postTempLog(r *http.Request, dbconn *sql.DB) (string, error) {
+	tempLogDAO := TempLogDAO{db: dbconn}
+
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		return "", BadRequestError(err)
@@ -119,7 +109,7 @@ func postTempLog(r *http.Request, dbconn *sql.DB) (string, error) {
 		return "", BadRequestError(err)
 	}
 
-	pk, err := createTempLog(dbconn, &tempLog)
+	pk, err := tempLogDAO.Create(&tempLog)
 	if err != nil {
 		return "", InternalServerError(err)
 	}
