@@ -24,8 +24,30 @@ func (dao *TempLogDAO) Create(tempLog *TempLog) (int, error) {
 }
 
 func (dao *TempLogDAO) Select(limit int) ([]*TempLog, error) {
+	const sqlStatement = "SELECT temp_log_id, ferment_run_id, temp FROM temp_log LIMIT $1"
+
+	rows, err := dao.db.Query(sqlStatement, limit)
+	if err != nil {
+		return nil, err
+	}
+
+	defer rows.Close()
+
 	logs := []*TempLog{}
-	logs = append(logs, &TempLog{})
+	for rows.Next() {
+		log := TempLog{}
+		err := rows.Scan(&log.Id, &log.FermentRun, &log.Temp)
+		if err != nil {
+			return nil, err
+		}
+		logs = append(logs, &log)
+	}
+
+	err = rows.Err()
+	if err != nil {
+		return nil, err
+	}
+
 	return logs, nil
 }
 
