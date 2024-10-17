@@ -26,6 +26,8 @@ const (
 type key int
 
 const VERSION_KEY key = 1
+const SESSION_KEY key = 2
+const USER_KEY key = 3
 
 type MessageBody struct {
 	Field string `json:"message"`
@@ -42,6 +44,10 @@ type PKResponse struct {
 type HTTPError struct {
 	StatusCode int
 	Err        error
+}
+
+type LoginResponse struct {
+	Token string `json:"token"`
 }
 
 func InternalServerError(err error) *HTTPError {
@@ -95,6 +101,76 @@ func pkResponse(pk int) (string, error) {
 
 func panicResponse() string {
 	return "{\"error\": \"Unknown Error!\"}"
+}
+
+func (env *RequestEnvironment) login(_ http.ResponseWriter, r *http.Request) (string, error) {
+	userDAO := UserDAO{db: env.db}
+	sessionDAO := SessionDAO{db: env.db}
+
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		return "", BadRequestError(err)
+	}
+
+	userLogin := UserLogin{}
+	err = json.Unmarshal(body, &userLogin)
+	if err != nil {
+		return "", BadRequestError(err)
+	}
+
+	user, err := userDAO.Login(userLogin.Email, userLogin.Password)
+	if err != nil {
+		return "", BadRequestError(err)
+	}
+
+	session, err := sessionDAO.Create(user.UserID)
+	if err != nil {
+		return "", InternalServerError(err)
+	}
+
+	loginResponse := LoginResponse{Token: session}
+
+	resp, err := json.Marshal(loginResponse)
+	if err != nil {
+		return "", InternalServerError(err)
+	}
+
+	return string(resp), nil
+}
+
+func (env *RequestEnvironment) register(_ http.ResponseWriter, r *http.Request) (string, error) {
+	userDAO := UserDAO{db: env.db}
+	sessionDAO := SessionDAO{db: env.db}
+
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		return "", BadRequestError(err)
+	}
+
+	userRegister := UserRegister{}
+	err = json.Unmarshal(body, &userRegister)
+	if err != nil {
+		return "", BadRequestError(err)
+	}
+
+	userId, err := userDAO.Register(userRegister.Email, userRegister.Password)
+	if err != nil {
+		return "", BadRequestError(err)
+	}
+
+	session, err := sessionDAO.Create(userId)
+	if err != nil {
+		return "", InternalServerError(err)
+	}
+
+	loginResponse := LoginResponse{Token: session}
+
+	resp, err := json.Marshal(loginResponse)
+	if err != nil {
+		return "", InternalServerError(err)
+	}
+
+	return string(resp), nil
 }
 
 func (env *RequestEnvironment) getTempLog(_ http.ResponseWriter, r *http.Request) (string, error) {
@@ -176,9 +252,45 @@ func initDB() *sql.DB {
 	return db
 }
 
-func versionMiddleWare(r *http.Request) (*http.Request, error) {
+func (env *RequestEnvironment) versionMiddleWare(r *http.Request) (*http.Request, error) {
 	return r.WithContext(context.WithValue(r.Context(), VERSION_KEY, 0.1)), nil
 }
+
+func (env *RequestEnvironment) sessionMiddleWare(r *http.Request) (*http.Request, error) {
+	authorization := r.Header.Get("Authorization")
+
+	if len(authorization) == 0 {
+		return r, nil
+	}
+
+	session, err := NewSessionDAO(env.db).Get(authorization)
+	if err != nil {
+		return nil, err
+	}
+
+	fmt.Println("Foobar!")
+
+	return r.WithContext(context.WithValue(r.Context(), SESSION_KEY, session)), nil
+}
+
+func (env *RequestEnvironment) userMiddleWare(r *http.Request) (*http.Request, error) {
+	userDAO := NewUserDAO(env.db)
+	ctxSession := r.Context().Value(SESSION_KEY)
+	if ctxSession == nil {
+		return r, nil
+	}
+
+	session := ctxSession.(*Session)
+
+	user, err := userDAO.GetByPK(session.UserId)
+	if err != nil {
+		return nil, err
+	}
+
+	return r.WithContext(context.WithValue(r.Context(), USER_KEY, user)), nil
+}
+
+type Middleware = func(r *http.Request) (*http.Request, error)
 
 func main() {
 	db := initDB()
@@ -186,12 +298,17 @@ func main() {
 
 	env := RequestEnvironment{db: db}
 
-	middlewares := []func(r *http.Request) (*http.Request, error){versionMiddleWare}
+	middlewares := []Middleware{
+		env.versionMiddleWare,
+		env.sessionMiddleWare,
+		env.userMiddleWare,
+	}
 
 	middleware := func(f func(w http.ResponseWriter, r *http.Request) (string, error)) func(w http.ResponseWriter, r *http.Request) (string, error) {
 		return func(w http.ResponseWriter, r *http.Request) (string, error) {
 			var req = r
 			for _, m := range middlewares {
+				fmt.Println("step")
 				tempreq, err := m(req)
 				if err != nil {
 					return "", nil
@@ -207,6 +324,8 @@ func main() {
 	mux.HandleFunc("POST /temp-log", responseHandler(middleware(env.postTempLog)))
 	mux.HandleFunc("GET /temp-log", responseHandler(middleware(env.getTempLogs)))
 	mux.HandleFunc("GET /temp-log/{id}", responseHandler(middleware(env.getTempLog)))
+	mux.HandleFunc("POST /login", responseHandler(middleware(env.login)))
+	mux.HandleFunc("POST /register", responseHandler(middleware(env.register)))
 
 	ctx, cancelCtx := context.WithCancel(context.Background())
 	server := &http.Server{
