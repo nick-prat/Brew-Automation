@@ -1,6 +1,9 @@
 package main
 
-import "database/sql"
+import (
+	"database/sql"
+	"raspberrysour/dao"
+)
 
 type TempLog struct {
 	Id         int     `json:"id"`
@@ -12,7 +15,7 @@ type TempLogDAO struct {
 	db *sql.DB
 }
 
-func NewTempLogDAO(db *sql.DB) DAO[TempLog] {
+func NewTempLogDAO(db *sql.DB) dao.DAO[TempLog] {
 	return &TempLogDAO{db: db}
 }
 

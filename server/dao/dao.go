@@ -1,4 +1,4 @@
-package main
+package dao
 
 type DAO[T any] interface {
 	Select(limit int) ([]*T, error)

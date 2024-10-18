@@ -1,4 +1,4 @@
-package main
+package dao
 
 import (
 	"bytes"
@@ -11,7 +11,7 @@ import (
 
 const USER_TABLE_NAME = "user_data"
 const USER_CREATE_COLS = "email, salt, password_hash"
-const USER_SELECT_COLS = "email, salt, password_hash"
+const USER_SELECT_COLS = "user_id, email, salt, password_hash"
 const USER_PK_COL = "user_id"
 
 type UserDAO struct {
@@ -24,13 +24,6 @@ type User struct {
 	Salt         []byte
 	PasswordHash []byte
 }
-
-type UserLogin struct {
-	Email    string
-	Password string
-}
-
-type UserRegister = UserLogin
 
 func hashPassword(password string, salt []byte) []byte {
 	hash := sha256.New()
@@ -66,7 +59,7 @@ func (dao *UserDAO) GetByEmail(email string) (*User, error) {
 
 	user := User{}
 	row := dao.db.QueryRow(sqlStatement, email)
-	err := row.Scan(&user.Email, &user.Salt, &user.PasswordHash)
+	err := row.Scan(&user.UserID, &user.Email, &user.Salt, &user.PasswordHash)
 
 	return &user, err
 }

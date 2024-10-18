@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"raspberrysour/dao"
 	"strconv"
 
 	_ "github.com/lib/pq"
@@ -49,6 +50,13 @@ type HTTPError struct {
 type LoginResponse struct {
 	Token string `json:"token"`
 }
+
+type UserLogin struct {
+	Email    string
+	Password string
+}
+
+type UserRegister = UserLogin
 
 func InternalServerError(err error) *HTTPError {
 	return &HTTPError{StatusCode: http.StatusInternalServerError, Err: err}
@@ -104,8 +112,8 @@ func panicResponse() string {
 }
 
 func (env *RequestEnvironment) login(_ http.ResponseWriter, r *http.Request) (string, error) {
-	userDAO := UserDAO{db: env.db}
-	sessionDAO := SessionDAO{db: env.db}
+	userDAO := dao.NewUserDAO(env.db)
+	sessionDAO := dao.NewSessionDAO(env.db)
 
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
@@ -139,8 +147,8 @@ func (env *RequestEnvironment) login(_ http.ResponseWriter, r *http.Request) (st
 }
 
 func (env *RequestEnvironment) register(_ http.ResponseWriter, r *http.Request) (string, error) {
-	userDAO := UserDAO{db: env.db}
-	sessionDAO := SessionDAO{db: env.db}
+	userDAO := dao.NewUserDAO(env.db)
+	sessionDAO := dao.NewSessionDAO(env.db)
 
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
@@ -263,24 +271,24 @@ func (env *RequestEnvironment) sessionMiddleWare(r *http.Request) (*http.Request
 		return r, nil
 	}
 
-	session, err := NewSessionDAO(env.db).Get(authorization)
+	session, err := dao.NewSessionDAO(env.db).Get(authorization)
 	if err != nil {
 		return nil, err
 	}
 
-	fmt.Println("Foobar!")
+	fmt.Println(session.SessionId)
 
 	return r.WithContext(context.WithValue(r.Context(), SESSION_KEY, session)), nil
 }
 
 func (env *RequestEnvironment) userMiddleWare(r *http.Request) (*http.Request, error) {
-	userDAO := NewUserDAO(env.db)
+	userDAO := dao.NewUserDAO(env.db)
 	ctxSession := r.Context().Value(SESSION_KEY)
 	if ctxSession == nil {
 		return r, nil
 	}
 
-	session := ctxSession.(*Session)
+	session := ctxSession.(*dao.Session)
 
 	user, err := userDAO.GetByPK(session.UserId)
 	if err != nil {
@@ -308,7 +316,6 @@ func main() {
 		return func(w http.ResponseWriter, r *http.Request) (string, error) {
 			var req = r
 			for _, m := range middlewares {
-				fmt.Println("step")
 				tempreq, err := m(req)
 				if err != nil {
 					return "", nil
