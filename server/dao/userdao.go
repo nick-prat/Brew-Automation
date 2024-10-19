@@ -64,17 +64,17 @@ func (dao *UserDAO) GetByEmail(email string) (*User, error) {
 	return &user, err
 }
 
-func (dao *UserDAO) Login(email string, password string) (*User, error) {
+func (dao *UserDAO) Login(email string, password string) (int, error) {
 	user, err := dao.GetByEmail(email)
 	if err != nil {
-		return nil, err
+		return 0, err
 	}
 
 	if !bytes.Equal(hashPassword(password, user.Salt), user.PasswordHash) {
-		return nil, errors.New("invalid password")
+		return 0, errors.New("invalid password")
 	}
 
-	return user, nil
+	return user.UserID, nil
 }
 
 func (dao *UserDAO) Register(email string, password string) (int, error) {
@@ -88,4 +88,32 @@ func (dao *UserDAO) Register(email string, password string) (int, error) {
 	passwordHash := hashPassword(password, salt)
 
 	return dao.Insert(&User{Email: email, Salt: salt, PasswordHash: passwordHash})
+}
+
+func (dao *UserDAO) Select(limit int) ([]*User, error) {
+	const sqlStatement = "SELECT " + USER_SELECT_COLS + " FROM " + USER_TABLE_NAME + " LIMIT $1"
+
+	rows, err := dao.db.Query(sqlStatement, limit)
+	if err != nil {
+		return nil, err
+	}
+
+	defer rows.Close()
+
+	users := []*User{}
+	for rows.Next() {
+		user := User{}
+		err := rows.Scan(&user.UserID, &user.Email, &user.Salt, &user.PasswordHash)
+		if err != nil {
+			return nil, err
+		}
+		users = append(users, &user)
+	}
+
+	err = rows.Err()
+	if err != nil {
+		return nil, err
+	}
+
+	return users, nil
 }

@@ -1,20 +1,31 @@
 import threading
+import time
+
 from time import sleep
 from tools.button import Button
-import LCD1602
+from tools.toggle import ThreeWaySwitch
+
+import tools.LCD1602 as LCD1602
 import RPi.GPIO as GPIO
 
-from tools.toggle import Toggle
 
 FILE = "/sys/bus/w1/devices/28-3ce1d44344a1/temperature"
 
 def c_to_f(c):
     return c * (9.0/5.0) + 32
 
+def compare(a, b):
+    if a < b:
+        return -1
+    elif b < a:
+        return 1
+    return 0
+
 IN1_PIN = 40
 IN2_PIN = 38
 COOL_PIN = 8
 WARM_PIN = 10
+OUTPUT_FREQUENCY = 0.5
 
 class Controller:
     def __init__(self) -> None:
@@ -23,8 +34,7 @@ class Controller:
         LCD1602.init(0x27, 1)
         LCD1602.write(0, 0, "0")
 
-        self.cool_relay = Toggle(COOL_PIN)
-        self.warm_relay = Toggle(WARM_PIN)
+        self.output = ThreeWaySwitch(COOL_PIN, WARM_PIN)
 
         self.up_button = Button(IN1_PIN, on_down=self.on_temp_up) 
         self.down_button = Button(IN2_PIN, on_down=self.on_temp_down)
@@ -39,6 +49,8 @@ class Controller:
         self.temp_thread = threading.Thread(target=self.read_temp_thread)
         self.temp_thread.start()
         self.temp_thread_event = threading.Event()
+        self.time = time.monotonic_ns()
+        self.ferm_id = 1
     
     def shutdown(self):
         GPIO.cleanup()
@@ -82,16 +94,16 @@ class Controller:
             LCD1602.write(0, 0, str(self.target_temp))
             LCD1602.write(0, 1, "{:.2f}".format(self.read_temp))
         
-        if self.read_temp > self.target_temp:
-            self.warm_relay.set_off()
-            self.cool_relay.set_on()
-        elif self.read_temp < self.target_temp:
-            self.warm_relay.set_on()
-            self.cool_relay.set_off()
-        else:
-            self.warm_relay.set_off()
-            self.cool_relay.set_off()
+        self.output.set_state(compare(self.read_temp, self.target_temp))
 
+        timestamp = time.monotonic_ns()
+        if timestamp - self.time > (1000 * 1000 * 1000) / OUTPUT_FREQUENCY:
+            self.time = timestamp
+            print("LOG:{},{},{}".format(self.read_temp, self.target_temp, self.state))
+
+
+
+        
     def loop(self):
         while True:
             self.process()

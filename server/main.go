@@ -2,16 +2,16 @@ package main
 
 import (
 	"context"
+	"crypto/rsa"
+	"crypto/x509"
 	"database/sql"
-	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"fmt"
-	"io"
 	"net"
 	"net/http"
 	"os"
-	"raspberrysour/dao"
-	"strconv"
+	"raspberrysour/api"
 
 	_ "github.com/lib/pq"
 )
@@ -24,224 +24,52 @@ const (
 	dbname   = "admin"
 )
 
-type key int
+func loadPrivateKey() (*rsa.PrivateKey, error) {
+	keyData, err := os.ReadFile("keys/private.pem")
+	if err != nil {
+		return nil, fmt.Errorf("could not open private key file")
+	}
 
-const VERSION_KEY key = 1
-const SESSION_KEY key = 2
-const USER_KEY key = 3
+	block, _ := pem.Decode(keyData)
+	if block == nil {
+		return nil, fmt.Errorf("failed to decode private key file")
+	}
 
-type MessageBody struct {
-	Field string `json:"message"`
+	privateKey, err := x509.ParsePKCS8PrivateKey(block.Bytes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse private key")
+	}
+
+	rsaPrivateKey, ok := privateKey.(*rsa.PrivateKey)
+	if !ok {
+		return nil, fmt.Errorf("parsed private key was not an RSA private key")
+	}
+
+	return rsaPrivateKey, nil
 }
 
-type ErrorBody struct {
-	Error string `json:"error"`
-}
-
-type PKResponse struct {
-	PK int `json:"pk"`
-}
-
-type HTTPError struct {
-	StatusCode int
-	Err        error
-}
-
-type LoginResponse struct {
-	Token string `json:"token"`
-}
-
-type UserLogin struct {
-	Email    string
-	Password string
-}
-
-type UserRegister = UserLogin
-
-func InternalServerError(err error) *HTTPError {
-	return &HTTPError{StatusCode: http.StatusInternalServerError, Err: err}
-}
-
-func BadRequestError(err error) *HTTPError {
-	return &HTTPError{StatusCode: http.StatusBadRequest, Err: err}
-}
-
-func (e *HTTPError) Error() string {
-	return e.Err.Error()
-}
-
-type RequestEnvironment struct {
-	db *sql.DB
-}
-
-func generateError(error string) string {
-	val, err := json.Marshal(ErrorBody{Error: error})
+func loadPublicKey() (*rsa.PublicKey, error) {
+	keyData, err := os.ReadFile("keys/public.pem")
 	if err != nil {
-		return panicResponse()
+		return nil, fmt.Errorf("could not open public key file")
 	}
 
-	return string(val)
-}
-
-func responseHandler(f func(w http.ResponseWriter, r *http.Request) (string, error)) func(w http.ResponseWriter, r *http.Request) {
-	return func(w http.ResponseWriter, r *http.Request) {
-		resp, err := f(w, r)
-		fmt.Printf("%s", err)
-		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			io.WriteString(w, generateError(err.Error()))
-		} else {
-			w.WriteHeader(http.StatusOK)
-			io.WriteString(w, resp)
-		}
+	block, _ := pem.Decode(keyData)
+	if block == nil {
+		return nil, fmt.Errorf("failed to decode public key file")
 	}
-}
 
-func pkResponse(pk int) (string, error) {
-	resp := PKResponse{PK: pk}
-	val, err := json.Marshal(&resp)
+	publicKey, err := x509.ParsePKIXPublicKey(block.Bytes)
 	if err != nil {
-		return "", err
-	} else {
-		return string(val), nil
-	}
-}
-
-func panicResponse() string {
-	return "{\"error\": \"Unknown Error!\"}"
-}
-
-func (env *RequestEnvironment) login(_ http.ResponseWriter, r *http.Request) (string, error) {
-	userDAO := dao.NewUserDAO(env.db)
-	sessionDAO := dao.NewSessionDAO(env.db)
-
-	body, err := io.ReadAll(r.Body)
-	if err != nil {
-		return "", BadRequestError(err)
+		return nil, fmt.Errorf("failed to parse public key")
 	}
 
-	userLogin := UserLogin{}
-	err = json.Unmarshal(body, &userLogin)
-	if err != nil {
-		return "", BadRequestError(err)
+	rsaPublicKey, ok := publicKey.(*rsa.PublicKey)
+	if !ok {
+		return nil, fmt.Errorf("parsed public key was not an RSA public key")
 	}
 
-	user, err := userDAO.Login(userLogin.Email, userLogin.Password)
-	if err != nil {
-		return "", BadRequestError(err)
-	}
-
-	session, err := sessionDAO.Create(user.UserID)
-	if err != nil {
-		return "", InternalServerError(err)
-	}
-
-	loginResponse := LoginResponse{Token: session}
-
-	resp, err := json.Marshal(loginResponse)
-	if err != nil {
-		return "", InternalServerError(err)
-	}
-
-	return string(resp), nil
-}
-
-func (env *RequestEnvironment) register(_ http.ResponseWriter, r *http.Request) (string, error) {
-	userDAO := dao.NewUserDAO(env.db)
-	sessionDAO := dao.NewSessionDAO(env.db)
-
-	body, err := io.ReadAll(r.Body)
-	if err != nil {
-		return "", BadRequestError(err)
-	}
-
-	userRegister := UserRegister{}
-	err = json.Unmarshal(body, &userRegister)
-	if err != nil {
-		return "", BadRequestError(err)
-	}
-
-	userId, err := userDAO.Register(userRegister.Email, userRegister.Password)
-	if err != nil {
-		return "", BadRequestError(err)
-	}
-
-	session, err := sessionDAO.Create(userId)
-	if err != nil {
-		return "", InternalServerError(err)
-	}
-
-	loginResponse := LoginResponse{Token: session}
-
-	resp, err := json.Marshal(loginResponse)
-	if err != nil {
-		return "", InternalServerError(err)
-	}
-
-	return string(resp), nil
-}
-
-func (env *RequestEnvironment) getTempLog(_ http.ResponseWriter, r *http.Request) (string, error) {
-	tempLogDAO := TempLogDAO{db: env.db}
-	pk, err := strconv.Atoi(r.PathValue("id"))
-	if err != nil {
-		return "", BadRequestError(err)
-	}
-
-	tempLog, err := tempLogDAO.Get(pk)
-	if err != nil {
-		return "", InternalServerError(err)
-	}
-
-	resp, err := json.Marshal(tempLog)
-	if err != nil {
-		return "", InternalServerError(err)
-	}
-
-	return string(resp), nil
-}
-
-func (env *RequestEnvironment) getTempLogs(_ http.ResponseWriter, _ *http.Request) (string, error) {
-	tempLogDAO := TempLogDAO{db: env.db}
-
-	tempLogs, err := tempLogDAO.Select(10)
-	if err != nil {
-		return "", InternalServerError(err)
-	}
-
-	resp, err := json.Marshal(tempLogs)
-	if err != nil {
-		return "", InternalServerError(err)
-	}
-
-	return string(resp), nil
-}
-
-func (env *RequestEnvironment) postTempLog(_ http.ResponseWriter, r *http.Request) (string, error) {
-	tempLogDAO := TempLogDAO{db: env.db}
-
-	body, err := io.ReadAll(r.Body)
-	if err != nil {
-		return "", BadRequestError(err)
-	}
-
-	tempLog := TempLog{}
-	err = json.Unmarshal(body, &tempLog)
-	if err != nil {
-		return "", BadRequestError(err)
-	}
-
-	pk, err := tempLogDAO.Create(&tempLog)
-	if err != nil {
-		return "", InternalServerError(err)
-	}
-
-	resp, err := pkResponse(pk)
-	if err != nil {
-		return "", InternalServerError(err)
-	}
-
-	return resp, nil
+	return rsaPublicKey, nil
 }
 
 func initDB() *sql.DB {
@@ -260,56 +88,27 @@ func initDB() *sql.DB {
 	return db
 }
 
-func (env *RequestEnvironment) versionMiddleWare(r *http.Request) (*http.Request, error) {
-	return r.WithContext(context.WithValue(r.Context(), VERSION_KEY, 0.1)), nil
-}
-
-func (env *RequestEnvironment) sessionMiddleWare(r *http.Request) (*http.Request, error) {
-	authorization := r.Header.Get("Authorization")
-
-	if len(authorization) == 0 {
-		return r, nil
-	}
-
-	session, err := dao.NewSessionDAO(env.db).Get(authorization)
-	if err != nil {
-		return nil, err
-	}
-
-	fmt.Println(session.SessionId)
-
-	return r.WithContext(context.WithValue(r.Context(), SESSION_KEY, session)), nil
-}
-
-func (env *RequestEnvironment) userMiddleWare(r *http.Request) (*http.Request, error) {
-	userDAO := dao.NewUserDAO(env.db)
-	ctxSession := r.Context().Value(SESSION_KEY)
-	if ctxSession == nil {
-		return r, nil
-	}
-
-	session := ctxSession.(*dao.Session)
-
-	user, err := userDAO.GetByPK(session.UserId)
-	if err != nil {
-		return nil, err
-	}
-
-	return r.WithContext(context.WithValue(r.Context(), USER_KEY, user)), nil
-}
-
-type Middleware = func(r *http.Request) (*http.Request, error)
-
 func main() {
 	db := initDB()
 	defer db.Close()
 
-	env := RequestEnvironment{db: db}
+	privateKey, err := loadPrivateKey()
+	if err != nil {
+		fmt.Println(err.Error())
+		os.Exit(1)
+	}
 
-	middlewares := []Middleware{
-		env.versionMiddleWare,
-		env.sessionMiddleWare,
-		env.userMiddleWare,
+	publicKey, err := loadPublicKey()
+	if err != nil {
+		fmt.Println(err.Error())
+		os.Exit(1)
+	}
+
+	env := api.NewRequestEnvironment(db, privateKey, publicKey)
+
+	middlewares := []api.Middleware{
+		env.VersionMiddleWare,
+		env.UserMiddleWare,
 	}
 
 	middleware := func(f func(w http.ResponseWriter, r *http.Request) (string, error)) func(w http.ResponseWriter, r *http.Request) (string, error) {
@@ -328,11 +127,12 @@ func main() {
 	}
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("POST /temp-log", responseHandler(middleware(env.postTempLog)))
-	mux.HandleFunc("GET /temp-log", responseHandler(middleware(env.getTempLogs)))
-	mux.HandleFunc("GET /temp-log/{id}", responseHandler(middleware(env.getTempLog)))
-	mux.HandleFunc("POST /login", responseHandler(middleware(env.login)))
-	mux.HandleFunc("POST /register", responseHandler(middleware(env.register)))
+	mux.HandleFunc("POST /temp-log", api.ResponseHandler(middleware(env.PostTempLog)))
+	mux.HandleFunc("GET /temp-log", api.ResponseHandler(middleware(env.GetTempLogs)))
+	mux.HandleFunc("GET /temp-log/{id}", api.ResponseHandler(middleware(env.GetTempLog)))
+	mux.HandleFunc("POST /login", api.ResponseHandler(middleware(env.Login)))
+	mux.HandleFunc("POST /register", api.ResponseHandler(middleware(env.Register)))
+	mux.HandleFunc("GET /user", api.ResponseHandler(middleware(env.GetUsers)))
 
 	ctx, cancelCtx := context.WithCancel(context.Background())
 	server := &http.Server{

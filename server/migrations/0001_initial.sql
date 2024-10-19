@@ -31,11 +31,3 @@ CREATE TABLE user_data (
     password_hash BYTEA NOT NULL,
     PRIMARY KEY(user_id)
 );
-
-CREATE TABLE session (
-    session_id INT GENERATED ALWAYS AS IDENTITY,
-    token BYTEA DEFAULT gen_random_bytes(16) NOT NULL,
-    user_id INT NOT NULL,
-    PRIMARY KEY (session_id),
-    CONSTRAINT fk_user_id FOREIGN KEY(user_id) REFERENCES user_data(user_id) ON DELETE CASCADE
-);
