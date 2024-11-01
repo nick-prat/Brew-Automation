@@ -51,8 +51,8 @@ func parseUserJWT(tokenString string, key *rsa.PublicKey) (*UserClaims, error) {
 		return nil, fmt.Errorf("failed to parse JWT")
 	}
 
-	if claims, ok := token.Claims.(UserClaims); ok && token.Valid {
-		return &claims, nil
+	if claims, ok := token.Claims.(*UserClaims); ok && token.Valid {
+		return claims, nil
 	} else {
 		return nil, fmt.Errorf("invalid JWT Claims")
 	}
@@ -125,12 +125,13 @@ func (env *RequestEnvironment) Login(_ http.ResponseWriter, r *http.Request) (st
 }
 
 func (env *RequestEnvironment) GetUsers(_ http.ResponseWriter, r *http.Request) (string, error) {
+	fmt.Println("foobar")
 	if !IsAuthenticated(r) {
 		return "", UnauthorizedError()
 	}
 	userDAO := dao.NewUserDAO(env.db)
 
-	users, err := userDAO.Select(10)
+	users, err := userDAO.Select(0, 10)
 	if err != nil {
 		return "", InternalServerError(err)
 	}

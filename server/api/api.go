@@ -2,11 +2,12 @@ package api
 
 import (
 	"crypto/rsa"
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+
+	"github.com/jmoiron/sqlx"
 )
 
 type MessageBody struct {
@@ -27,12 +28,12 @@ type HTTPError struct {
 }
 
 type RequestEnvironment struct {
-	db            *sql.DB
+	db            *sqlx.DB
 	jwtSigningKey *rsa.PrivateKey
 	jwtVerifyKey  *rsa.PublicKey
 }
 
-func NewRequestEnvironment(db *sql.DB, privateKey *rsa.PrivateKey, publicKey *rsa.PublicKey) *RequestEnvironment {
+func NewRequestEnvironment(db *sqlx.DB, privateKey *rsa.PrivateKey, publicKey *rsa.PublicKey) *RequestEnvironment {
 	return &RequestEnvironment{db, privateKey, publicKey}
 }
 

@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/rsa"
 	"crypto/x509"
-	"database/sql"
 	"encoding/pem"
 	"errors"
 	"fmt"
@@ -13,6 +12,7 @@ import (
 	"os"
 	"raspberrysour/api"
 
+	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
 )
 
@@ -72,9 +72,9 @@ func loadPublicKey() (*rsa.PublicKey, error) {
 	return rsaPublicKey, nil
 }
 
-func initDB() *sql.DB {
+func initDB() *sqlx.DB {
 	psqlInfo := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable", host, port, user, password, dbname)
-	db, err := sql.Open("postgres", psqlInfo)
+	db, err := sqlx.Open("postgres", psqlInfo)
 	if err != nil {
 		panic(err)
 	}
@@ -117,7 +117,7 @@ func main() {
 			for _, m := range middlewares {
 				tempreq, err := m(req)
 				if err != nil {
-					return "", nil
+					return "", err
 				}
 				req = tempreq
 			}

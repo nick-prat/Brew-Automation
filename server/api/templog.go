@@ -32,7 +32,7 @@ func (env *RequestEnvironment) GetTempLog(_ http.ResponseWriter, r *http.Request
 func (env *RequestEnvironment) GetTempLogs(_ http.ResponseWriter, _ *http.Request) (string, error) {
 	tempLogDAO := dao.NewTempLogDAO(env.db)
 
-	tempLogs, err := tempLogDAO.Select(10)
+	tempLogs, err := tempLogDAO.Select(0, 10)
 	if err != nil {
 		return "", InternalServerError(err)
 	}
