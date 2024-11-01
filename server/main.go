@@ -7,13 +7,16 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"log"
 	"net"
 	"net/http"
 	"os"
 	"raspberrysour/api"
+	"raspberrysour/pb"
 
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
+	"google.golang.org/grpc"
 )
 
 const (
@@ -155,6 +158,18 @@ func main() {
 
 		cancelCtx()
 	}()
+
+	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", 50051))
+	if err != nil {
+		log.Fatalf("Failed to listen: %v\n", err)
+	}
+
+	s := grpc.NewServer()
+	pb.RegisterAPIServer(s, &pb.Server{})
+	log.Printf("server listening at %v", lis.Addr())
+	if err := s.Serve(lis); err != nil {
+		log.Fatalf("failed to serve: %v", err)
+	}
 
 	<-ctx.Done()
 }

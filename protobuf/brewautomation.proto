@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+option go_package = "../server/pb;pb";
+package brewautomation;
+
+service API {
+  rpc CreateTempLog (TempLogRequest) returns (TempLogRequest) {}
+}
+
+message TempLogRequest {
+  float temperature = 1;
+  int32 fermentRunId = 2;
+}
