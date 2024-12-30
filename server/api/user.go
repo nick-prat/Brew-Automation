@@ -22,14 +22,14 @@ type UserLogin struct {
 }
 
 type UserClaims struct {
-	Id   int    `json:"id"`
+	Id   int32  `json:"id"`
 	Role string `json:"role"`
 	jwt.RegisteredClaims
 }
 
 type UserRegister = UserLogin
 
-func generateUserJWT(userId int, key *rsa.PrivateKey) (string, error) {
+func generateUserJWT(userId int32, key *rsa.PrivateKey) (string, error) {
 	claims := UserClaims{
 		userId,
 		"user",

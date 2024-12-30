@@ -16,7 +16,7 @@ const USER_SELECT_COLS = "user_id, email"
 const USER_PK_COL = "user_id"
 
 type User struct {
-	UserID       int    `json:"id" db:"user_id"`
+	UserID       int32  `json:"id" db:"user_id"`
 	Email        string `json:"email"`
 	Salt         []byte `json:"-"`
 	PasswordHash []byte `json:"-" db:"password_hash"`
@@ -43,10 +43,10 @@ func NewUserDAO(db *sqlx.DB) *UserDAO {
 	}
 }
 
-func (dao *UserDAO) Insert(user *User) (int, error) {
+func (dao *UserDAO) Insert(user *User) (int32, error) {
 	sqlStatement := "INSERT INTO " + USER_TABLE_NAME + " (" + USER_CREATE_COLS + ") VALUES ($1, $2, $3) RETURNING " + USER_PK_COL
 	fmt.Println(sqlStatement)
-	id := 0
+	id := int32(0)
 	err := dao.db.QueryRow(sqlStatement, user.Email, user.Salt, user.PasswordHash).Scan(&id)
 	return id, err
 }
@@ -61,7 +61,7 @@ func (dao *UserDAO) GetByEmail(email string) (*User, error) {
 	return &user, err
 }
 
-func (dao *UserDAO) Login(email string, password string) (int, error) {
+func (dao *UserDAO) Login(email string, password string) (int32, error) {
 	user, err := dao.GetByEmail(email)
 	if err != nil {
 		return 0, err
@@ -74,7 +74,7 @@ func (dao *UserDAO) Login(email string, password string) (int, error) {
 	return user.UserID, nil
 }
 
-func (dao *UserDAO) Register(email string, password string) (int, error) {
+func (dao *UserDAO) Register(email string, password string) (int32, error) {
 	salt := make([]byte, 16)
 
 	_, err := rand.Read(salt)

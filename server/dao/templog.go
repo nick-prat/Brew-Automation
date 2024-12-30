@@ -10,9 +10,9 @@ const TEMP_LOG_TABLE_NAME string = "temp_log"
 const TEMP_LOG_SELECT_COLUMSN string = "temp_log_id, ferment_run_id, temp, time_stamp"
 
 type TempLog struct {
-	Id         int       `json:"id" db:"temp_log_id"`
+	Id         int32     `json:"id" db:"temp_log_id"`
 	Temp       float32   `json:"temp" db:"temp"`
-	FermentRun int       `json:"ferment_run_id" db:"ferment_run_id"`
+	FermentRun int32     `json:"ferment_run_id" db:"ferment_run_id"`
 	TimeStamp  time.Time `json:"time_stamp" db:"time_stamp"`
 }
 
@@ -30,9 +30,9 @@ func NewTempLogDAO(db *sqlx.DB) *TempLogDAO {
 	}
 }
 
-func (dao *TempLogDAO) Create(tempLog *TempLog) (int, error) {
+func (dao *TempLogDAO) Create(tempLog *TempLog) (int32, error) {
 	sqlStatement := "INSERT INTO temp_log (temp, ferment_run_id) VALUES ($1, $2) RETURNING temp_log_id"
-	id := 0
+	id := int32(0)
 	err := dao.db.QueryRow(sqlStatement, tempLog.Temp, tempLog.FermentRun).Scan(&id)
 	return id, err
 }

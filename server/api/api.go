@@ -19,7 +19,7 @@ type ErrorBody struct {
 }
 
 type PKBody struct {
-	PK int `json:"pk"`
+	PK int32 `json:"pk"`
 }
 
 type HTTPError struct {
@@ -86,7 +86,7 @@ func ResponseHandler(f func(w http.ResponseWriter, r *http.Request) (string, err
 	}
 }
 
-func PKResponse(pk int) (string, error) {
+func PKResponse(pk int32) (string, error) {
 	resp := PKBody{PK: pk}
 	val, err := json.Marshal(&resp)
 	if err != nil {

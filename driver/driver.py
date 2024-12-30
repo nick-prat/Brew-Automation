@@ -100,9 +100,6 @@ class Controller:
         if timestamp - self.time > (1000 * 1000 * 1000) / OUTPUT_FREQUENCY:
             self.time = timestamp
             print("LOG:{},{},{}".format(self.read_temp, self.target_temp, self.state))
-
-
-
         
     def loop(self):
         while True:

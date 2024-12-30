@@ -1,0 +1,51 @@
+syntax = "proto3";
+import "google/protobuf/empty.proto";
+option go_package = "../server/pb;pb";
+package brewautomation;
+
+service API {
+  rpc CreateTempLog (TempLogRequest) returns (TempLogResponse) {}
+  rpc GetFermentRun (FermentRunGetRequest) returns (FermentRunResponse) {}
+  rpc CreateFermentRun (FermentRunCreateRequest) returns (FermentRunResponse) {}
+  rpc Register (google.protobuf.Empty) returns (RegisterResponse) {}
+  rpc SubscribeDeviceInstruction (google.protobuf.Empty) returns (stream DeviceInstruction) {}
+  rpc PublishDeviceInstruction (DeviceInstruction) returns (google.protobuf.Empty) {}
+}
+
+message Command {
+  int32 messageCode = 1;
+}
+
+message RegisterResponse {
+  string token = 1;
+}
+
+message TempLogRequest {
+  float temperature = 1;
+  int32 fermentRunId = 2;
+}
+
+message TempLogResponse {
+  int32 id = 1;
+  float temperature = 2;
+  int32 fermentRunId = 3;
+  string timestamp = 4;
+}
+
+message FermentRunGetRequest {
+  int32 id = 1;
+}
+
+message FermentRunCreateRequest {
+  string name = 2;
+}
+
+message FermentRunResponse {
+  int32 id = 1;
+  string name = 2;
+}
+
+message DeviceInstruction {
+  int32 code = 1;
+  string deviceId = 2;
+}

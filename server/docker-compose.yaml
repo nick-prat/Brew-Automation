@@ -4,6 +4,7 @@ services:
     restart: on-failure
     environment:
       POSTGRES_USER: admin
+      PGUSER: admin
       POSTGRES_PASSWORD: 1234
     ports:
       - 5432:5432
@@ -34,6 +35,7 @@ services:
     working_dir: /raspberrysour
     ports:
       - 3333:3333
+      - 50051:50051
     volumes:
       - ./:/raspberrysour
   

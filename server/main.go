@@ -7,13 +7,19 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"log"
 	"net"
 	"net/http"
 	"os"
 	"raspberrysour/api"
+	"raspberrysour/pb"
 
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 )
 
 const (
@@ -88,6 +94,15 @@ func initDB() *sqlx.DB {
 	return db
 }
 
+func grpcMiddleware(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+	_, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return nil, status.Error(codes.Unauthenticated, "missing metadata")
+	}
+
+	return handler(ctx, req)
+}
+
 func main() {
 	db := initDB()
 	defer db.Close()
@@ -155,6 +170,22 @@ func main() {
 
 		cancelCtx()
 	}()
+
+	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", 50051))
+	if err != nil {
+		log.Fatalf("Failed to listen: %v\n", err)
+	}
+
+	s := grpc.NewServer(
+		grpc.UnaryInterceptor(grpcMiddleware),
+	)
+	pb.RegisterAPIServer(s, &pb.Server{
+		DB: db,
+	})
+	log.Printf("server listening at %v", lis.Addr())
+	if err := s.Serve(lis); err != nil {
+		log.Fatalf("failed to serve: %v", err)
+	}
 
 	<-ctx.Done()
 }

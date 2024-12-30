@@ -16,7 +16,7 @@ func (env *RequestEnvironment) GetTempLog(_ http.ResponseWriter, r *http.Request
 		return "", BadRequestError(err)
 	}
 
-	tempLog, err := tempLogDAO.Get(pk)
+	tempLog, err := tempLogDAO.Get(int32(pk))
 	if err != nil {
 		return "", InternalServerError(err)
 	}

@@ -23,7 +23,7 @@ func (dao *BaseDAO[T]) Select(skip int, limit int) (*[]T, error) {
 	return &rows, nil
 }
 
-func (dao *BaseDAO[T]) Get(pk int) (*T, error) {
+func (dao *BaseDAO[T]) Get(pk int32) (*T, error) {
 	row := new(T)
 	err := dao.db.Get(row, dao.getStatement, pk)
 	if err != nil {
