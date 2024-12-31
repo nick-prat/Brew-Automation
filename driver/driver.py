@@ -5,6 +5,7 @@ from time import sleep
 from tools.button import Button
 from tools.toggle import ThreeWaySwitch
 
+import output as output
 import tools.LCD1602 as LCD1602
 import RPi.GPIO as GPIO
 
@@ -28,11 +29,13 @@ WARM_PIN = 10
 OUTPUT_FREQUENCY = 0.5
 
 class Controller:
-    def __init__(self) -> None:
+    def __init__(self, output_strategy) -> None:
         GPIO.setmode(GPIO.BOARD)
         
         LCD1602.init(0x27, 1)
         LCD1602.write(0, 0, "0")
+
+        self.output_strategy = output_strategy
 
         self.output = ThreeWaySwitch(COOL_PIN, WARM_PIN)
 
@@ -43,7 +46,6 @@ class Controller:
         self.previous_temp = 72
 
         self.read_temp = 0
-        self.previous_read_temp = 0 
 
         self.delay = 0.01
         self.temp_thread = threading.Thread(target=self.read_temp_thread)
@@ -79,20 +81,10 @@ class Controller:
                 temp_file.seek(0)
     
     def process(self):
-        has_written = False
-
         if self.target_temp != self.previous_temp:
             self.previous_temp = self.target_temp
-            has_written = True
 
-        if self.read_temp != self.previous_read_temp:
-            self.previous_read_temp = self.read_temp 
-            has_written = True
-
-        if has_written: 
-            LCD1602.clear()
-            LCD1602.write(0, 0, str(self.target_temp))
-            LCD1602.write(0, 1, "{:.2f}".format(self.read_temp))
+        self.output_strategy.process(self.read_temp, self.target_temp)
         
         self.output.set_state(compare(self.read_temp, self.target_temp))
 
@@ -108,7 +100,7 @@ class Controller:
 
 
 if __name__ == "__main__":
-    c = Controller()
+    c = Controller(output_strategy=output.ThrottleOutputDecorator(output.MultiOutputDecorator(output.LCDOutputStrategy(), output.ConsoleOutputStrategy())))
     try:
         c.loop()
     except KeyboardInterrupt:
