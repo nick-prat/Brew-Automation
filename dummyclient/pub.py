@@ -10,7 +10,7 @@ import brewautomation_pb2_grpc
 def run():
     with grpc.insecure_channel("localhost:50051") as channel:
         stub = brewautomation_pb2_grpc.APIStub(channel)
-        response = stub.PublishDeviceInstruction(brewautomation_pb2.DeviceInstruction(code=1, deviceId="abc"))
+        response = stub.PublishDeviceInstruction(brewautomation_pb2.DeviceInstruction(code=2, deviceId="abc"))
     print("Greeter client received:\n" + str(response))
 
 
